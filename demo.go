@@ -1,66 +1,80 @@
-// Package plugindemo a demo plugin.
-package plugindemo
+package traefik_jmjt_plugin
 
 import (
-	"bytes"
 	"context"
-	"fmt"
+	"encoding/json"
 	"net/http"
-	"text/template"
+	"strings"
 )
 
-// Config the plugin configuration.
 type Config struct {
-	Headers map[string]string `json:"headers,omitempty"`
+	URL        string `json:"url,omitempty"`
+	AllowField string `json:"allow-field,omitempty"`
 }
 
-// CreateConfig creates the default plugin configuration.
 func CreateConfig() *Config {
-	return &Config{
-		Headers: make(map[string]string),
-	}
+	return &Config{}
 }
 
-// Demo a Demo plugin.
-type Demo struct {
-	next     http.Handler
-	headers  map[string]string
-	name     string
-	template *template.Template
+type Opa struct {
+	next       http.Handler
+	url        string
+	allowField string
 }
 
-// New created a new Demo plugin.
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
-	if len(config.Headers) == 0 {
-		return nil, fmt.Errorf("headers cannot be empty")
-	}
 
-	return &Demo{
-		headers:  config.Headers,
-		next:     next,
-		name:     name,
-		template: template.New("demo").Delims("[[", "]]"),
+	return &Opa{
+		next:       next,
+		url:        config.URL,
+		allowField: config.AllowField,
 	}, nil
 }
 
-func (a *Demo) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	for key, value := range a.headers {
-		tmpl, err := a.template.Parse(value)
-		if err != nil {
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
-		}
+func (o *Opa) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-		writer := &bytes.Buffer{}
+	p := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 
-		err = tmpl.Execute(writer, req)
-		if err != nil {
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		req.Header.Set(key, writer.String())
+	data := &RequestData{
+		Method: r.Method,
+		Path:   p,
+		User:   r.Header.Get("Authorization"),
 	}
 
-	a.next.ServeHTTP(rw, req)
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp, err := http.Post(o.url, "application/json", strings.NewReader(string(jsonData)))
+	if err != nil {
+		http.Error(w, "发生了错误", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, "不等于OK", resp.StatusCode)
+		return
+	}
+
+	var allowed map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&allowed); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if allowed == nil {
+		http.Error(w, "没有权限", http.StatusForbidden)
+		return
+	}
+	e.next.ServeHTTP(w, r)
+
+}
+
+type RequestData struct {
+	Method string   `json:"method"`
+	Path   []string `json:"path"`
+	User   string   `json:"user"`
 }

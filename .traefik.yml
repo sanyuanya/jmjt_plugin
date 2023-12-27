@@ -1,12 +1,11 @@
-displayName: Demo Plugin
+displayName: Auth Plugin
 type: middleware
 iconPath: .assets/icon.png
 
-import: github.com/traefik/plugindemo
+import: github.com/sanyuanya/jmjt_plugin
 
-summary: '[Demo] Add Request Header'
+summary: '[Auth] 授权'
 
 testData:
-  Headers:
-    X-Demo: test
-    X-URL: '{{URL}}'
+  opa:
+    address: https://www.baidu.com
