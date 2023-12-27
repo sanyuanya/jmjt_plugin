@@ -1,6 +1,5 @@
 displayName: Auth Plugin
 type: middleware
-iconPath: .assets/icon.png
 
 import: github.com/sanyuanya/jmjt_plugin
 
